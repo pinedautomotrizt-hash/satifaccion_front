@@ -1,0 +1,954 @@
+---
+import Base from '../layouts/Base.astro';
+---
+<Base titulo="Panel de satisfacción">
+  <header class="cabecera">
+    <div>
+      <h1>Panel de satisfacción</h1>
+      <p>Indicadores NPS y CSI del servicio</p>
+    </div>
+    <nav>
+      <a href="/">Ir a la encuesta ↗</a>
+      <button id="btn-salir" class="btn-texto oculto" type="button">Salir</button>
+    </nav>
+  </header>
+
+  <!-- Acceso -->
+  <main id="vista-acceso" class="acceso">
+    <form id="form-clave" class="tarjeta acceso-caja">
+      <h2>Ingresar al panel</h2>
+      <p class="ayuda">Escriba la clave de administrador (<code>ADMIN_API_KEY</code> del archivo <code>.env</code> de la API).</p>
+      <input id="clave" type="password" placeholder="Clave de administrador" autocomplete="current-password" required />
+      <button class="btn" type="submit">Entrar</button>
+      <p id="error-clave" class="error" role="alert"></p>
+    </form>
+  </main>
+
+  <!-- Panel: menú lateral + módulos -->
+  <div id="vista-panel" class="layout oculto">
+    <aside class="menu" aria-label="Módulos">
+      <nav>
+        <a href="#importaciones" data-modulo="importaciones">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg>
+          <span>Importaciones</span>
+        </a>
+        <a href="#kpi" data-modulo="kpi">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10m6 10V4m6 16v-7m4 7H2" /></svg>
+          <span>KPI</span>
+        </a>
+      </nav>
+    </aside>
+
+    <main class="panel">
+    <!-- Módulo: Importaciones -->
+    <section id="modulo-importaciones" class="modulo oculto">
+      <header class="modulo-titulo">
+        <h2>Importaciones</h2>
+        <p class="ayuda">Cargue el reporte de órdenes de trabajo.</p>
+      </header>
+
+      <section class="tarjeta importar">
+        <div class="importar-texto">
+          <h3>Cargar reporte de órdenes de trabajo</h3>
+          <p class="ayuda">
+            <code>ServOrdTrabajoxLocal-Deta_….xlsx</code> o <code>.csv</code>, tal como sale del sistema.
+            Si una orden ya existe se actualiza su estado (nunca retrocede).
+          </p>
+          <p class="ultima"><b id="ultima-carga"></b></p>
+        </div>
+        <form id="form-importar" class="fila">
+          <input id="archivo" type="file" accept=".xlsx,.csv" required />
+          <button class="btn" type="submit" id="btn-importar">Importar</button>
+        </form>
+        <div id="r-importar" class="resultado"></div>
+      </section>
+
+      <section class="tarjeta">
+        <h3>Historial de cargas</h3>
+        <p class="sub">Últimas 10 importaciones</p>
+        <div class="tabla-contenedor">
+          <table>
+            <thead><tr><th>Fecha</th><th>Archivo</th><th class="num">Filas</th><th class="num">OT</th><th class="num">Omitidas</th></tr></thead>
+            <tbody id="tabla-importaciones"></tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+
+    <!-- Módulo: KPI -->
+    <section id="modulo-kpi" class="modulo oculto">
+    <header class="modulo-titulo">
+      <h2>KPI</h2>
+      <p class="ayuda">Indicadores NPS y CSI de las encuestas.</p>
+    </header>
+
+    <!-- Filtro de fechas: aplica a todo lo de abajo -->
+    <div class="filtros" role="group" aria-label="Rango de fechas">
+      <div class="presets" id="presets">
+        <button type="button" data-preset="hoy">Hoy</button>
+        <button type="button" data-preset="7">Últimos 7 días</button>
+        <button type="button" data-preset="30">Últimos 30 días</button>
+        <button type="button" data-preset="mes">Este mes</button>
+        <button type="button" data-preset="mes-anterior">Mes anterior</button>
+      </div>
+      <form id="form-rango" class="rango">
+        <label>Desde <input id="desde" type="date" required /></label>
+        <label>Hasta <input id="hasta" type="date" required /></label>
+        <button class="btn btn-chico" type="submit">Aplicar</button>
+      </form>
+    </div>
+    <p id="error-resumen" class="error" role="alert"></p>
+
+    <div id="contenido" class="contenido">
+      <!-- Indicadores principales -->
+      <section class="kpis">
+        <article class="tarjeta kpi kpi-hero">
+          <h3>NPS <span class="sub">Net Promoter Score</span></h3>
+          <div class="kpi-valor"><b id="k-nps">–</b><span id="k-nps-nivel" class="chip"></span></div>
+          <div class="medidor" aria-hidden="true">
+            <div class="medidor-pista"></div>
+            <div class="medidor-cero"></div>
+            <div id="k-nps-marca" class="medidor-marca"></div>
+          </div>
+          <div class="medidor-escala" aria-hidden="true"><span>−100</span><span>0</span><span>+100</span></div>
+          <p class="kpi-nota">% promotores (9-10) − % detractores (0-6)</p>
+        </article>
+        <article class="tarjeta kpi">
+          <h3>CSI <span class="sub">Customer Satisfaction Index</span></h3>
+          <div class="kpi-valor"><b id="k-sat">–</b></div>
+          <p class="kpi-nota">% de clientes satisfechos (carita verde)</p>
+        </article>
+        <article class="tarjeta kpi">
+          <h3>Encuestas</h3>
+          <div class="kpi-valor"><b id="k-total">–</b></div>
+          <p class="kpi-nota" id="k-rango"></p>
+        </article>
+      </section>
+
+      <!-- Distribuciones -->
+      <section class="grilla-2">
+        <article class="tarjeta grafico">
+          <header><h3>NPS · ¿Nos recomendaría?</h3><p class="sub">Respuestas de 0 a 10</p></header>
+          <div id="g-nps-seg" class="g-seg"></div>
+          <div id="g-nps-col" class="g-col"></div>
+          <details><summary>Ver datos</summary><div id="t-nps"></div></details>
+        </article>
+        <article class="tarjeta grafico">
+          <header><h3>CSI · Satisfacción con el servicio</h3><p class="sub">Caritas de la pregunta 1</p></header>
+          <div id="g-sat-seg" class="g-seg"></div>
+          <div id="g-sat-col" class="g-col"></div>
+          <details><summary>Ver datos</summary><div id="t-sat"></div></details>
+        </article>
+      </section>
+
+      <!-- Tendencia -->
+      <article class="tarjeta grafico">
+        <header><h3>Evolución del NPS</h3><p class="sub" id="g-agrupacion-nps"></p></header>
+        <div id="g-nps-linea" class="g-linea"></div>
+        <details><summary>Ver datos</summary><div id="t-tendencia-nps"></div></details>
+      </article>
+
+      <!-- Por asesor -->
+      <section class="tarjeta">
+        <h3>Por asesor</h3>
+        <div class="tabla-contenedor">
+          <table>
+            <thead><tr><th>Asesor</th><th class="num">Encuestas</th><th class="num">NPS</th><th class="num">CSI</th></tr></thead>
+            <tbody id="tabla-asesor"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Comentarios (solo se piden cuando la calificación es baja) -->
+      <section class="tarjeta">
+        <h3>Comentarios de clientes <span class="sub" id="c-total"></span></h3>
+        <p class="sub">Se piden solo cuando la calificación es baja: insatisfecho o recomendación de 0 a 6.</p>
+        <ul id="lista-comentarios" class="comentarios"></ul>
+      </section>
+
+      <!-- Detalle -->
+      <section class="tarjeta">
+        <h3>Detalle de encuestas</h3>
+        <div class="tabla-contenedor">
+          <table>
+            <thead>
+              <tr><th>Fecha</th><th>OT</th><th>Placa</th><th>Cliente</th><th>Vehículo</th><th>Servicio</th><th>Asesor</th><th>Satisfacción</th><th class="num">Recomendación</th><th>Comentario</th></tr>
+            </thead>
+            <tbody id="tabla-detalle"></tbody>
+          </table>
+        </div>
+        <button id="btn-mas" class="btn btn-secundario btn-chico oculto" type="button">Mostrar más</button>
+      </section>
+    </div>
+    </section>
+    </main>
+  </div>
+
+  <div id="tooltip" class="tooltip" role="status" hidden></div>
+</Base>
+
+<style is:global>
+  /* Colores de los gráficos (paleta validada: rojo/gris/azul = negativo/neutral/positivo) */
+  :root {
+    --g-neg: #e34948;
+    --g-neu: #9a988f;
+    --g-pos: #2a78d6;
+    --g-serie: #2a78d6;
+    --g-grilla: #e1e0d9;
+    --g-eje: #c3c2b7;
+    --tinta-1: #0b0b0b;
+    --tinta-2: #52514e;
+    --tinta-3: #898781;
+  }
+
+  .cabecera {
+    background: var(--cabecera);
+    color: #fff;
+    padding: 18px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .cabecera h1 { margin: 0; font-size: 1.4rem; }
+  .cabecera p { margin: 2px 0 0; opacity: 0.75; font-size: 0.9rem; }
+  .cabecera nav { display: flex; gap: 16px; align-items: center; }
+  .cabecera a, .btn-texto { color: #fff; background: none; font-size: 0.95rem; }
+  .btn-texto { text-decoration: underline; padding: 0; }
+
+  .tarjeta { background: var(--tarjeta); border-radius: 16px; padding: 20px; box-shadow: 0 1px 3px rgba(15, 42, 74, 0.08); }
+  h2 { margin: 0 0 6px; font-size: 1.1rem; }
+  h3 { margin: 0; font-size: 1rem; }
+  .sub { color: var(--tinta-2); font-weight: 400; font-size: 0.85rem; margin: 2px 0 0; }
+  .ayuda { color: var(--tinta-2); margin: 0; font-size: 0.92rem; }
+  .fila { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  input { font: inherit; padding: 9px 12px; border: 1px solid var(--borde); border-radius: 10px; background: #fff; }
+  label { display: flex; gap: 6px; align-items: center; color: var(--tinta-2); font-size: 0.92rem; }
+  .btn { padding: 11px 22px; font-size: 1rem; }
+  .btn-chico { padding: 9px 18px; font-size: 0.95rem; }
+  .error { color: var(--rojo); font-weight: 600; margin: 0; }
+  .error:empty { display: none; }
+  .ok { color: #1b7d3f; font-weight: 600; margin: 0 0 4px; }
+
+  /* Acceso */
+  .acceso { display: grid; place-items: center; padding: 64px 16px; }
+  .acceso-caja { width: min(100%, 420px); display: grid; gap: 14px; padding: 28px; }
+
+  /* Layout: menú lateral + contenido */
+  .layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); min-height: calc(100vh - 88px); }
+  .menu { background: #fff; border-right: 1px solid var(--borde); padding: 20px 12px; }
+  .menu nav { position: sticky; top: 20px; display: grid; gap: 4px; }
+  .menu a {
+    display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 10px;
+    color: var(--tinta-2); text-decoration: none; font-weight: 600;
+  }
+  .menu a:hover { background: #eef2f8; color: var(--azul); }
+  .menu a[aria-current='page'] { background: var(--azul); color: #fff; }
+  .menu svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  /* Módulos */
+  .panel { width: 100%; max-width: 1240px; margin: 0 auto; padding: 24px 24px 48px; }
+  .modulo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .modulo > * { min-width: 0; }
+  .modulo-titulo h2 { font-size: 1.5rem; margin: 0 0 4px; }
+  .ultima { margin: 8px 0 0; font-size: 0.92rem; }
+  .ultima b:empty { display: none; }
+  .panel > *, .contenido > *, .kpis > *, .grilla-3 > *, .grilla-2 > * { min-width: 0; }
+  .importar { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; }
+  .importar-texto { flex: 1 1 320px; }
+  #form-importar { min-width: 0; max-width: 100%; }
+  .importar input[type='file'] { flex: 1 1 220px; width: 100%; min-width: 0; }
+  .importar code { overflow-wrap: anywhere; }
+  .resultado { flex-basis: 100%; }
+  .resultado:empty { display: none; }
+  .resultado ul { margin: 6px 0 0; color: var(--tinta-2); font-size: 0.9rem; }
+
+  .filtros { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+  .presets { display: flex; flex-wrap: wrap; gap: 6px; }
+  .presets button {
+    background: #fff; color: var(--tinta-2); border: 1px solid var(--borde);
+    padding: 7px 14px; border-radius: 999px; font-size: 0.9rem;
+  }
+  .presets button:hover { background: #eef2f8; }
+  .presets button[aria-pressed='true'] { background: var(--azul); border-color: var(--azul); color: #fff; font-weight: 600; }
+  .rango { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+  .contenido { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; transition: opacity 0.15s; }
+  .contenido.cargando { opacity: 0.5; }
+
+  /* KPIs */
+  .kpis { display: grid; grid-template-columns: 1.4fr repeat(2, 1fr); gap: 16px; }
+  .kpi { display: flex; flex-direction: column; gap: 8px; }
+  .kpi h3 .sub { display: block; }
+  .kpi-valor { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .kpi-valor b { font-size: 2.4rem; font-weight: 650; line-height: 1.1; color: var(--tinta-1); }
+  .kpi-hero .kpi-valor b { font-size: 3.4rem; }
+  .kpi-de { color: var(--tinta-2); font-size: 1.1rem; }
+  .kpi-nota { margin: auto 0 0; color: var(--tinta-2); font-size: 0.85rem; }
+  .chip { font-size: 0.8rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; background: #eef0f3; color: var(--tinta-2); }
+  .chip:empty { display: none; }
+  .medidor { position: relative; height: 10px; margin-top: 4px; }
+  .medidor-pista { position: absolute; inset: 3px 0; border-radius: 4px; background: linear-gradient(90deg, #f6d4d3 0 50%, #d3e3f6 50% 100%); }
+  .medidor-cero { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--g-eje); }
+  .medidor-marca {
+    position: absolute; top: -3px; width: 16px; height: 16px; margin-left: -8px; border-radius: 50%;
+    background: var(--g-neu); border: 2px solid var(--tarjeta); box-shadow: 0 0 0 1px rgba(11, 11, 11, 0.1);
+    left: 50%; transition: left 0.3s;
+  }
+  .medidor-escala { display: flex; justify-content: space-between; color: var(--tinta-3); font-size: 0.75rem; }
+
+  /* Gráficos */
+  .grilla-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .grilla-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+  .grafico { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .grafico svg { display: block; width: 100%; overflow: visible; }
+  .g-seg svg text { font-size: 12px; font-weight: 600; }
+  .leyenda { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 0.85rem; color: var(--tinta-2); }
+  .leyenda span { display: inline-flex; align-items: center; gap: 6px; }
+  .leyenda i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+  .leyenda b { color: var(--tinta-1); font-weight: 600; }
+  .vacio { color: var(--tinta-3); font-size: 0.9rem; text-align: center; padding: 24px 0; margin: 0; }
+  .eje { fill: var(--tinta-3); font-size: 11px; }
+  .marca-hit { fill: transparent; cursor: default; outline: none; }
+  .marca-hit:focus-visible { stroke: var(--azul-claro); stroke-width: 2; }
+  .barra { transition: opacity 0.1s; }
+  .barra.activa { opacity: 0.75; }
+  details { font-size: 0.9rem; }
+  summary { cursor: pointer; color: var(--azul-claro); font-weight: 600; }
+  details table { margin-top: 8px; }
+
+  .tooltip {
+    position: fixed; z-index: 10; pointer-events: none;
+    background: #fff; border: 1px solid rgba(11, 11, 11, 0.1); border-radius: 10px;
+    box-shadow: 0 6px 20px rgba(15, 42, 74, 0.15); padding: 8px 12px; font-size: 0.85rem; min-width: 120px;
+  }
+  .tooltip .t-valor { font-size: 1.05rem; font-weight: 700; color: var(--tinta-1); display: flex; align-items: center; gap: 8px; }
+  .tooltip .t-clave { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+  .tooltip .t-etiqueta { color: var(--tinta-2); }
+
+  /* Tablas */
+  .tabla-contenedor { overflow-x: auto; margin-top: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--g-grilla); white-space: nowrap; }
+  th { color: var(--tinta-2); font-weight: 600; font-size: 0.82rem; }
+  #btn-mas { margin-top: 12px; }
+  .comentarios { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
+  .comentarios li { border: 1px solid var(--g-grilla); border-left: 4px solid var(--g-neg); border-radius: 10px; padding: 12px 14px; }
+  .comentarios .c-texto { margin: 0 0 8px; font-size: 1rem; color: var(--tinta-1); white-space: pre-wrap; overflow-wrap: anywhere; }
+  .comentarios .c-meta { margin: 0; font-size: 0.82rem; color: var(--tinta-2); display: flex; flex-wrap: wrap; gap: 4px 12px; }
+  .comentarios .vacio { border: 0; padding: 12px 0; text-align: left; }
+  td.celda-comentario { white-space: normal; min-width: 220px; max-width: 360px; overflow-wrap: anywhere; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .punto-color { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+
+  @media (max-width: 760px) {
+    .layout { grid-template-columns: minmax(0, 1fr); }
+    .menu { border-right: 0; border-bottom: 1px solid var(--borde); padding: 8px 12px; }
+    .menu nav { position: static; grid-template-columns: 1fr 1fr; }
+    .menu a { justify-content: center; }
+    .panel { padding: 16px 16px 40px; }
+  }
+  @media (max-width: 1000px) {
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+    .kpi-hero { grid-column: 1 / -1; }
+    .grilla-3 { grid-template-columns: 1fr; }
+    .grilla-2 { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 560px) {
+    .kpis { grid-template-columns: 1fr; }
+  }
+</style>
+
+<script>
+  const API = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000';
+  const NS = 'http://www.w3.org/2000/svg';
+  const NEG = 'var(--g-neg)', NEU = 'var(--g-neu)', POS = 'var(--g-pos)';
+
+  const SATISFACCION = ['Insatisfecho', 'Neutral', 'Satisfecho'];
+  const colorNps = (v: number) => (v >= 9 ? POS : v >= 7 ? NEU : NEG);
+  const colorSat = (v: number) => [NEG, NEU, POS][v - 1];
+
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const fmt = (n: number, dec = 0) => n.toLocaleString('es-PE', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  const pct = (v: number, total: number) => (total ? `${fmt((v / total) * 100)}%` : '0%');
+
+  type Resumen = any;
+  let ultimo: Resumen | null = null;
+
+  // ------------------------------------------------------------------ acceso
+  const leerClave = () => { try { return sessionStorage.getItem('adminClave') ?? ''; } catch { return ''; } };
+  const guardarClave = (v: string) => { try { v ? sessionStorage.setItem('adminClave', v) : sessionStorage.removeItem('adminClave'); } catch {} };
+  let clave = leerClave();
+
+  async function api(ruta: string, opciones: RequestInit = {}) {
+    const r = await fetch(`${API}${ruta}`, { ...opciones, headers: { ...(opciones.headers ?? {}), 'x-api-key': clave } });
+    const datos = await r.json().catch(() => ({}));
+    if (r.status === 401) { salir(); throw new Error(datos.mensaje ?? 'Clave incorrecta.'); }
+    if (!r.ok) throw new Error(datos.mensaje ?? `Error ${r.status}`);
+    return datos;
+  }
+
+  // ------------------------------------------------------------------ menú lateral
+  const MODULOS = ['importaciones', 'kpi'];
+  function irA(modulo: string) {
+    if (!MODULOS.includes(modulo)) modulo = 'kpi';
+    for (const m of MODULOS) $(`modulo-${m}`).classList.toggle('oculto', m !== modulo);
+    document.querySelectorAll<HTMLAnchorElement>('.menu a').forEach((a) =>
+      a.dataset.modulo === modulo ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
+    // Los gráficos se dibujan con el ancho visible: al volver a KPI se redibujan
+    if (modulo === 'kpi' && ultimo) requestAnimationFrame(() => pintar(ultimo));
+  }
+  window.addEventListener('hashchange', () => irA(location.hash.slice(1)));
+
+  function mostrarPanel(visible: boolean) {
+    $('vista-acceso').classList.toggle('oculto', visible);
+    $('vista-panel').classList.toggle('oculto', !visible);
+    $('btn-salir').classList.toggle('oculto', !visible);
+  }
+
+  function salir() {
+    clave = '';
+    guardarClave('');
+    mostrarPanel(false);
+  }
+
+  $('form-clave').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    clave = $<HTMLInputElement>('clave').value.trim();
+    $('error-clave').textContent = '';
+    try {
+      await api('/api/admin/importaciones');
+      guardarClave(clave);
+      iniciarPanel();
+    } catch (err) {
+      $('error-clave').textContent = (err as Error).message.includes('Clave')
+        ? 'Clave incorrecta.'
+        : 'No se pudo conectar con la API. ¿Está encendida?';
+    }
+  });
+  $('btn-salir').addEventListener('click', salir);
+
+  // ------------------------------------------------------------------ importar
+  function hace(fecha: string) {
+    const min = Math.round((Date.now() - new Date(fecha.replace(' ', 'T')).getTime()) / 60000);
+    if (min < 1) return 'hace un momento';
+    if (min < 60) return `hace ${min} min`;
+    const h = Math.floor(min / 60);
+    return h < 24 ? `hace ${h} h ${min % 60} min` : `hace ${Math.floor(h / 24)} días`;
+  }
+
+  async function cargarImportaciones() {
+    try {
+      const r = await api('/api/admin/importaciones');
+      const u = r.importaciones[0];
+      $('ultima-carga').textContent = u
+        ? `Última carga ${hace(u.created_at)} (${u.ordenes} OT).`
+        : 'Todavía no se ha cargado ningún reporte.';
+      filas($<HTMLTableSectionElement>('tabla-importaciones'), r.importaciones.map((i: any) => [
+        `${i.created_at.slice(0, 16)} · ${hace(i.created_at)}`, i.archivo,
+        { t: fmt(i.filas), num: true }, { t: fmt(i.ordenes), num: true }, { t: fmt(i.errores), num: true },
+      ]), 5, 'Todavía no se ha cargado ningún reporte.');
+    } catch { /* el error se muestra en el resumen */ }
+  }
+
+  $('form-importar').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const archivo = $<HTMLInputElement>('archivo').files?.[0];
+    if (!archivo) return;
+    const salida = $('r-importar');
+    const boton = $<HTMLButtonElement>('btn-importar');
+    boton.disabled = true;
+    salida.textContent = 'Importando…';
+    try {
+      const form = new FormData();
+      form.append('archivo', archivo);
+      const r = await api('/api/admin/importar', { method: 'POST', body: form });
+      salida.replaceChildren();
+      const ok = document.createElement('p');
+      ok.className = 'ok';
+      ok.textContent = `✔ ${r.procesadas} órdenes cargadas/actualizadas · ` +
+        Object.entries(r.porEstado).map(([e, n]) => `${e}: ${n}`).join(' · ');
+      salida.append(ok);
+      if (r.errores.length) {
+        const p = document.createElement('p');
+        p.className = 'error';
+        p.textContent = `${r.errores.length} órdenes omitidas:`;
+        const ul = document.createElement('ul');
+        for (const x of r.errores.slice(0, 30)) {
+          const li = document.createElement('li');
+          li.textContent = `${x.numero_ot}: ${x.motivo}`;
+          ul.append(li);
+        }
+        salida.append(p, ul);
+      }
+      cargarImportaciones();
+    } catch (err) {
+      salida.replaceChildren();
+      const p = document.createElement('p');
+      p.className = 'error';
+      p.textContent = (err as Error).message;
+      salida.append(p);
+    } finally {
+      boton.disabled = false;
+    }
+  });
+
+  // ------------------------------------------------------------------ fechas
+  const iso = (d: Date) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  function rangoPreset(p: string): [string, string] {
+    const hoy = new Date();
+    const menos = (dias: number) => new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - dias);
+    switch (p) {
+      case 'hoy': return [iso(hoy), iso(hoy)];
+      case '7': return [iso(menos(6)), iso(hoy)];
+      case '30': return [iso(menos(29)), iso(hoy)];
+      case 'mes-anterior': return [iso(new Date(hoy.getFullYear(), hoy.getMonth() - 1, 1)), iso(new Date(hoy.getFullYear(), hoy.getMonth(), 0))];
+      default: return [iso(new Date(hoy.getFullYear(), hoy.getMonth(), 1)), iso(hoy)];
+    }
+  }
+  function marcarPreset(p: string | null) {
+    document.querySelectorAll<HTMLButtonElement>('#presets button')
+      .forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.preset === p)));
+  }
+  document.querySelectorAll<HTMLButtonElement>('#presets button').forEach((b) =>
+    b.addEventListener('click', () => {
+      const [d, h] = rangoPreset(b.dataset.preset!);
+      $<HTMLInputElement>('desde').value = d;
+      $<HTMLInputElement>('hasta').value = h;
+      marcarPreset(b.dataset.preset!);
+      cargarResumen();
+    }),
+  );
+  $('form-rango').addEventListener('submit', (e) => {
+    e.preventDefault();
+    marcarPreset(null);
+    cargarResumen();
+  });
+
+  // ------------------------------------------------------------------ resumen
+  async function cargarResumen() {
+    $('error-resumen').textContent = '';
+    $('contenido').classList.add('cargando'); // se mantiene el gráfico anterior atenuado, sin saltos
+    try {
+      const desde = $<HTMLInputElement>('desde').value;
+      const hasta = $<HTMLInputElement>('hasta').value;
+      ultimo = await api(`/api/admin/resumen?desde=${desde}&hasta=${hasta}`);
+      visibles = POR_PAGINA;
+      pintar(ultimo);
+    } catch (err) {
+      $('error-resumen').textContent = (err as Error).message;
+    } finally {
+      $('contenido').classList.remove('cargando');
+    }
+  }
+
+  function nivelNps(v: number) {
+    if (v >= 70) return 'Excelencia';
+    if (v >= 50) return 'Excelente';
+    if (v >= 0) return 'Bueno';
+    return 'Por mejorar';
+  }
+
+  function pintar(r: Resumen) {
+    // KPIs
+    const nps = r.nps.valor;
+    $('k-nps').textContent = nps === null ? '–' : (nps > 0 ? '+' : '') + fmt(nps);
+    $('k-nps-nivel').textContent = nps === null ? '' : nivelNps(nps);
+    const marca = $('k-nps-marca');
+    marca.style.left = `${nps === null ? 50 : (nps + 100) / 2}%`;
+    marca.style.background = nps === null ? NEU : nps >= 0 ? POS : NEG;
+
+    $('k-sat').textContent = r.satisfaccion.pctSatisfechos === null ? '–' : `${fmt(r.satisfaccion.pctSatisfechos)}%`;
+    $('k-total').textContent = fmt(r.total);
+    $('k-rango').textContent = `${fechaCorta(r.desde)} – ${fechaCorta(r.hasta)}`;
+
+    // Distribuciones
+    const dn = r.nps.distribucion as number[];
+    segmentos($('g-nps-seg'), [
+      { etiqueta: 'Detractores (0-6)', valor: r.nps.detractores, color: NEG, tinta: '#fff' },
+      { etiqueta: 'Pasivos (7-8)', valor: r.nps.pasivos, color: NEU, tinta: '#0b0b0b' },
+      { etiqueta: 'Promotores (9-10)', valor: r.nps.promotores, color: POS, tinta: '#fff' },
+    ]);
+    columnas($('g-nps-col'), dn.map((v, i) => ({ etiqueta: String(i), nombre: `Respondió ${i}`, valor: v, color: colorNps(i) })));
+    tablaDatos($('t-nps'), ['Respuesta', 'Encuestas', '%'], dn.map((v, i) => [String(i), fmt(v), pct(v, r.total)]));
+
+    const ds = r.satisfaccion.distribucion as number[];
+    segmentos($('g-sat-seg'), ds.map((v, i) => ({
+      etiqueta: SATISFACCION[i], valor: v, color: colorSat(i + 1), tinta: i === 1 ? '#0b0b0b' : '#fff',
+    })));
+    columnas($('g-sat-col'), ds.map((v, i) => ({ etiqueta: SATISFACCION[i], nombre: SATISFACCION[i], valor: v, color: colorSat(i + 1) })));
+    tablaDatos($('t-sat'), ['Respuesta', 'Encuestas', '%'], ds.map((v, i) => [SATISFACCION[i], fmt(v), pct(v, r.total)]));
+
+    // Tendencias
+    const puntos = r.tendencia.puntos as { periodo: string; total: number; nps: number | null }[];
+    const agrupado = r.tendencia.agrupacion === 'semana' ? 'Por semana (inicio lunes)' : 'Por día';
+    $('g-agrupacion-nps').textContent = `${agrupado} · escala −100 a +100`;
+    linea($('g-nps-linea'), puntos.map((p) => ({ x: p.periodo, y: p.nps, n: p.total })),
+      { min: -100, max: 100, ticks: [-100, -50, 0, 50, 100], formato: (v) => (v > 0 ? '+' : '') + fmt(v), nombre: 'NPS' });
+    tablaDatos($('t-tendencia-nps'), ['Periodo', 'Encuestas', 'NPS'],
+      puntos.map((p) => [fechaCorta(p.periodo), fmt(p.total), p.nps === null ? '—' : fmt(p.nps)]));
+
+    // Tablas
+    filas($<HTMLTableSectionElement>('tabla-asesor'), r.porAsesor.map((a: any) => [
+      a.asesor, { t: fmt(a.total), num: true },
+      { t: a.nps === null ? '—' : (a.nps > 0 ? '+' : '') + fmt(a.nps), num: true },
+      { t: a.pctSatisfechos === null ? '—' : `${fmt(a.pctSatisfechos)}%`, num: true },
+    ]), 5);
+    mostrarDetalle(r.detalle, visibles);
+    mostrarComentarios(r.detalle.filter((e: any) => e.comentario));
+  }
+
+  function mostrarComentarios(lista: any[]) {
+    const ul = $('lista-comentarios');
+    ul.replaceChildren();
+    $('c-total').textContent = lista.length ? `· ${fmt(lista.length)}` : '';
+    if (!lista.length) {
+      const li = document.createElement('li');
+      li.className = 'vacio';
+      li.textContent = 'Sin comentarios en este rango.';
+      ul.append(li);
+      return;
+    }
+    for (const e of lista.slice(0, 30)) {
+      const li = document.createElement('li');
+      const texto = document.createElement('p');
+      texto.className = 'c-texto';
+      texto.textContent = e.comentario;
+      const meta = document.createElement('p');
+      meta.className = 'c-meta';
+      for (const t of [
+        e.created_at.slice(0, 16), `OT ${e.numero_ot}`, e.cliente ?? '', e.asesor ? `Asesor: ${e.asesor}` : '',
+        `${SATISFACCION[e.satisfaccion - 1]} · Recomendación ${e.recomendacion}`,
+      ].filter(Boolean)) {
+        const span = document.createElement('span');
+        span.textContent = t;
+        meta.append(span);
+      }
+      li.append(texto, meta);
+      ul.append(li);
+    }
+  }
+
+  const POR_PAGINA = 25;
+  let visibles = POR_PAGINA;
+  function mostrarDetalle(detalle: any[], cantidad: number) {
+    visibles = cantidad;
+    const boton = $('btn-mas');
+    boton.classList.toggle('oculto', detalle.length <= cantidad);
+    boton.textContent = `Mostrar más (${fmt(Math.min(detalle.length, cantidad))} de ${fmt(detalle.length)})`;
+    filas($<HTMLTableSectionElement>('tabla-detalle'), detalle.slice(0, cantidad).map((e: any) => [
+      e.created_at.slice(0, 16), e.numero_ot, e.placa, e.cliente ?? '—',
+      [e.marca, e.modelo].filter(Boolean).join(' ') || '—', e.servicio ?? '—', e.asesor ?? '—',
+      { t: SATISFACCION[e.satisfaccion - 1], color: colorSat(e.satisfaccion) },
+      { t: String(e.recomendacion), color: colorNps(e.recomendacion), num: true },
+      { t: e.comentario ?? '', clase: 'celda-comentario' },
+    ]), 10);
+  }
+
+  $('btn-mas').addEventListener('click', () => ultimo && mostrarDetalle(ultimo.detalle, visibles + POR_PAGINA));
+
+  const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  function fechaCorta(f: string) {
+    const [a, m, d] = f.split('-').map(Number);
+    return `${d} ${MESES[m - 1]} ${a}`;
+  }
+
+  // ------------------------------------------------------------------ tablas (siempre con textContent)
+  type Celda = string | { t: string; num?: boolean; color?: string; clase?: string };
+  function filas(tbody: HTMLTableSectionElement, datos: Celda[][], columnas: number, vacio = 'Sin encuestas en este rango.') {
+    tbody.replaceChildren();
+    if (!datos.length) {
+      const tr = tbody.insertRow();
+      const td = tr.insertCell();
+      td.colSpan = columnas;
+      td.className = 'vacio';
+      td.textContent = vacio;
+      return;
+    }
+    for (const fila of datos) {
+      const tr = tbody.insertRow();
+      for (const c of fila) {
+        const td = tr.insertCell();
+        const celda = typeof c === 'string' ? { t: c } : c;
+        if (celda.num) td.className = 'num';
+        if (celda.clase) td.className = celda.clase;
+        if (celda.color) {
+          const punto = document.createElement('span');
+          punto.className = 'punto-color';
+          punto.style.background = celda.color;
+          td.append(punto);
+        }
+        td.append(celda.t);
+      }
+    }
+  }
+
+  function tablaDatos(cont: HTMLElement, cabeceras: string[], datos: string[][]) {
+    const tabla = document.createElement('table');
+    const tr = tabla.createTHead().insertRow();
+    cabeceras.forEach((c, i) => {
+      const th = document.createElement('th');
+      th.textContent = c;
+      if (i > 0) th.className = 'num';
+      tr.append(th);
+    });
+    const tbody = tabla.createTBody();
+    filas(tbody, datos.map((f) => f.map((t, i) => (i > 0 ? { t, num: true } : t))), cabeceras.length);
+    cont.replaceChildren(tabla);
+  }
+
+  // ------------------------------------------------------------------ tooltip
+  const tip = $('tooltip');
+  function mostrarTip(x: number, y: number, valor: string, etiqueta: string, color?: string) {
+    tip.replaceChildren();
+    const v = document.createElement('div');
+    v.className = 't-valor';
+    if (color) {
+      const k = document.createElement('span');
+      k.className = 't-clave';
+      k.style.background = color;
+      v.append(k);
+    }
+    v.append(valor);
+    const e = document.createElement('div');
+    e.className = 't-etiqueta';
+    e.textContent = etiqueta;
+    tip.append(v, e);
+    tip.hidden = false;
+    const r = tip.getBoundingClientRect();
+    const izq = Math.min(x + 14, window.innerWidth - r.width - 8);
+    const arriba = y - r.height - 12 < 8 ? y + 16 : y - r.height - 12;
+    tip.style.left = `${Math.max(8, izq)}px`;
+    tip.style.top = `${arriba}px`;
+  }
+  const ocultarTip = () => { tip.hidden = true; };
+
+  // ------------------------------------------------------------------ SVG
+  function svg(tag: string, attrs: Record<string, string | number>, padre?: Element) {
+    const n = document.createElementNS(NS, tag);
+    for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v));
+    padre?.append(n);
+    return n;
+  }
+  function texto(padre: Element, x: number, y: number, t: string, attrs: Record<string, string | number> = {}) {
+    const n = svg('text', { x, y, ...attrs }, padre);
+    n.textContent = t;
+    return n;
+  }
+  /** Barra vertical: esquinas de 4px arriba, base recta. */
+  function pathColumna(x: number, y: number, w: number, h: number) {
+    const r = Math.min(4, h, w / 2);
+    return `M${x},${y + h}V${y + r}Q${x},${y} ${x + r},${y}H${x + w - r}Q${x + w},${y} ${x + w},${y + r}V${y + h}Z`;
+  }
+  function pasoLimpio(max: number, marcas = 4) {
+    const bruto = Math.max(1, max) / marcas;
+    const pot = 10 ** Math.floor(Math.log10(bruto));
+    const paso = [1, 2, 5, 10].map((m) => m * pot).find((p) => p >= bruto)!;
+    return Math.max(1, paso);
+  }
+
+  type Parte = { etiqueta: string; valor: number; color: string; tinta: string };
+  /** Barra 100% horizontal con separaciones de 2px y leyenda con cantidad y %. */
+  function segmentos(cont: HTMLElement, partes: Parte[]) {
+    cont.replaceChildren();
+    const total = partes.reduce((a, p) => a + p.valor, 0);
+    const W = Math.max(cont.clientWidth, 200), H = 26;
+    const s = svg('svg', { viewBox: `0 0 ${W} ${H}`, height: H, role: 'img', 'aria-label': partes.map((p) => `${p.etiqueta}: ${p.valor}`).join(', ') }, cont);
+    if (!total) {
+      svg('rect', { x: 0, y: 0, width: W, height: H, rx: 4, fill: '#eef0f3' }, s);
+      texto(s, W / 2, H / 2 + 4, 'Sin datos', { 'text-anchor': 'middle', class: 'eje' });
+    } else {
+      const id = `clip-${cont.id}`;
+      svg('rect', { x: 0, y: 0, width: W, height: H, rx: 4 }, svg('clipPath', { id }, s));
+      const g = svg('g', { 'clip-path': `url(#${id})` }, s);
+      const visibles = partes.filter((p) => p.valor > 0);
+      const util = W - 2 * (visibles.length - 1);
+      let x = 0;
+      for (const p of visibles) {
+        const w = (p.valor / total) * util;
+        const rect = svg('rect', { x, y: 0, width: w, height: H, fill: p.color, class: 'barra' }, g);
+        const etiqueta = pct(p.valor, total);
+        if (w >= etiqueta.length * 8 + 12) {
+          texto(g, x + w / 2, H / 2 + 4, etiqueta, { 'text-anchor': 'middle', fill: p.tinta });
+        }
+        const hit = svg('rect', { x, y: 0, width: w, height: H, class: 'marca-hit', tabindex: 0 }, s);
+        conTooltip(hit, rect, () => [`${fmt(p.valor)} · ${etiqueta}`, p.etiqueta, p.color]);
+        x += w + 2;
+      }
+    }
+    const ley = document.createElement('div');
+    ley.className = 'leyenda';
+    for (const p of partes) {
+      const item = document.createElement('span');
+      const sw = document.createElement('i');
+      sw.style.background = p.color;
+      const n = document.createElement('b');
+      n.textContent = total ? pct(p.valor, total) : '–';
+      item.append(sw, `${p.etiqueta} `, n);
+      ley.append(item);
+    }
+    cont.append(ley);
+  }
+
+  type Columna = { etiqueta: string; nombre: string; valor: number; color: string };
+  /** Columnas verticales (≤24px de ancho, esquinas redondeadas arriba) con grilla sutil. */
+  function columnas(cont: HTMLElement, datos: Columna[]) {
+    cont.replaceChildren();
+    const total = datos.reduce((a, d) => a + d.valor, 0);
+    const W = Math.max(cont.clientWidth, 200), H = 170;
+    const m = { arriba: 8, abajo: 22, izq: 28, der: 4 };
+    const ancho = W - m.izq - m.der, alto = H - m.arriba - m.abajo;
+    const maxV = Math.max(...datos.map((d) => d.valor), 1);
+    const paso = pasoLimpio(maxV, 3);
+    const tope = Math.ceil(maxV / paso) * paso;
+    const s = svg('svg', { viewBox: `0 0 ${W} ${H}`, height: H, role: 'img', 'aria-label': datos.map((d) => `${d.nombre}: ${d.valor}`).join(', ') }, cont);
+    const y = (v: number) => m.arriba + alto - (v / tope) * alto;
+
+    for (let v = 0; v <= tope; v += paso) {
+      svg('line', { x1: m.izq, x2: W - m.der, y1: y(v), y2: y(v), stroke: v === 0 ? 'var(--g-eje)' : 'var(--g-grilla)', 'stroke-width': 1 }, s);
+      texto(s, m.izq - 6, y(v) + 4, fmt(v), { 'text-anchor': 'end', class: 'eje' });
+    }
+    const banda = ancho / datos.length;
+    const w = Math.min(24, banda - 2);
+    datos.forEach((d, i) => {
+      const cx = m.izq + banda * i + banda / 2;
+      const h = (d.valor / tope) * alto;
+      let barra: Element | null = null;
+      if (d.valor > 0) barra = svg('path', { d: pathColumna(cx - w / 2, y(d.valor), w, h), fill: d.color, class: 'barra' }, s);
+      const etq = banda < 34 || d.etiqueta.length * 6.5 < banda ? d.etiqueta : d.etiqueta.slice(0, Math.floor(banda / 7)) + '…';
+      texto(s, cx, H - 6, etq, { 'text-anchor': 'middle', class: 'eje' });
+      const hit = svg('rect', { x: m.izq + banda * i, y: m.arriba, width: banda, height: alto, class: 'marca-hit', tabindex: 0 }, s);
+      conTooltip(hit, barra, () => [`${fmt(d.valor)} · ${pct(d.valor, total)}`, d.nombre, d.color]);
+    });
+  }
+
+  type Punto = { x: string; y: number | null; n: number };
+  /** Línea de 2px con cortes donde no hubo encuestas, cruz de lectura y etiqueta del último valor. */
+  function linea(cont: HTMLElement, puntos: Punto[], o: { min: number; max: number; ticks: number[]; formato: (v: number) => string; nombre: string }) {
+    cont.replaceChildren();
+    if (!puntos.some((p) => p.y !== null)) {
+      const p = document.createElement('p');
+      p.className = 'vacio';
+      p.textContent = 'Sin encuestas en este rango.';
+      cont.append(p);
+      return;
+    }
+    const W = Math.max(cont.clientWidth, 240), H = 220;
+    const m = { arriba: 12, abajo: 24, izq: 40, der: 44 };
+    const ancho = W - m.izq - m.der, alto = H - m.arriba - m.abajo;
+    const x = (i: number) => m.izq + (puntos.length === 1 ? ancho / 2 : (i / (puntos.length - 1)) * ancho);
+    const y = (v: number) => m.arriba + alto - ((v - o.min) / (o.max - o.min)) * alto;
+    const s = svg('svg', { viewBox: `0 0 ${W} ${H}`, height: H, role: 'img', 'aria-label': `${o.nombre} por periodo` }, cont);
+
+    for (const t of o.ticks) {
+      const base = o.min < 0 ? t === 0 : t === o.min;
+      svg('line', { x1: m.izq, x2: W - m.der, y1: y(t), y2: y(t), stroke: base ? 'var(--g-eje)' : 'var(--g-grilla)', 'stroke-width': 1 }, s);
+      texto(s, m.izq - 8, y(t) + 4, o.formato(t), { 'text-anchor': 'end', class: 'eje' });
+    }
+    // Etiquetas del eje X: unas 6 fechas repartidas
+    const cada = Math.max(1, Math.ceil(puntos.length / 6));
+    puntos.forEach((p, i) => {
+      if (i % cada !== 0) return;
+      const [, mm, dd] = p.x.split('-').map(Number);
+      texto(s, x(i), H - 6, `${dd} ${MESES[mm - 1]}`, { 'text-anchor': 'middle', class: 'eje' });
+    });
+
+    // Línea con cortes donde no hay datos
+    let d = '';
+    let abierto = false;
+    puntos.forEach((p, i) => {
+      if (p.y === null) { abierto = false; return; }
+      d += `${abierto ? 'L' : 'M'}${x(i)},${y(p.y)}`;
+      abierto = true;
+    });
+    svg('path', { d, fill: 'none', stroke: 'var(--g-serie)', 'stroke-width': 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, s);
+    const conDatos = puntos.map((p, i) => ({ ...p, i })).filter((p) => p.y !== null);
+    if (conDatos.length <= 45) {
+      for (const p of conDatos) {
+        svg('circle', { cx: x(p.i), cy: y(p.y!), r: 4, fill: 'var(--g-serie)', stroke: 'var(--tarjeta)', 'stroke-width': 2 }, s);
+      }
+    }
+    const ultimo = conDatos[conDatos.length - 1];
+    texto(s, x(ultimo.i) + 8, y(ultimo.y!) + 4, o.formato(ultimo.y!), { fill: 'var(--tinta-1)', 'font-size': 12, 'font-weight': 600 });
+
+    // Cruz de lectura: se ubica en la fecha más cercana al puntero
+    const cruz = svg('line', { y1: m.arriba, y2: m.arriba + alto, stroke: 'var(--g-eje)', 'stroke-width': 1, visibility: 'hidden' }, s);
+    const foco = svg('circle', { r: 5, fill: 'var(--g-serie)', stroke: 'var(--tarjeta)', 'stroke-width': 2, visibility: 'hidden' }, s);
+    const capa = svg('rect', { x: m.izq, y: m.arriba, width: ancho, height: alto, class: 'marca-hit', tabindex: 0 }, s) as SVGRectElement;
+    let actual = ultimo.i;
+    const mostrar = (i: number, cx: number, cy: number) => {
+      actual = i;
+      const p = puntos[i];
+      cruz.setAttribute('x1', String(x(i)));
+      cruz.setAttribute('x2', String(x(i)));
+      cruz.setAttribute('visibility', 'visible');
+      if (p.y !== null) {
+        foco.setAttribute('cx', String(x(i)));
+        foco.setAttribute('cy', String(y(p.y)));
+        foco.setAttribute('visibility', 'visible');
+      } else foco.setAttribute('visibility', 'hidden');
+      mostrarTip(cx, cy, p.y === null ? 'Sin encuestas' : `${o.nombre} ${o.formato(p.y)}`,
+        `${fechaCorta(p.x)} · ${fmt(p.n)} encuesta${p.n === 1 ? '' : 's'}`, p.y === null ? undefined : 'var(--g-serie)');
+    };
+    const ocultar = () => { cruz.setAttribute('visibility', 'hidden'); foco.setAttribute('visibility', 'hidden'); ocultarTip(); };
+    capa.addEventListener('pointermove', (e) => {
+      const r = capa.getBoundingClientRect();
+      const rel = (e.clientX - r.left) / r.width;
+      const i = puntos.length === 1 ? 0 : Math.round(rel * (puntos.length - 1));
+      mostrar(Math.max(0, Math.min(puntos.length - 1, i)), e.clientX, e.clientY);
+    });
+    capa.addEventListener('pointerleave', ocultar);
+    capa.addEventListener('blur', ocultar);
+    const enTeclado = () => {
+      const r = capa.getBoundingClientRect();
+      mostrar(actual, r.left + (x(actual) - m.izq) * (r.width / ancho), r.top + 20);
+    };
+    capa.addEventListener('focus', enTeclado);
+    capa.addEventListener('keydown', (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      actual = Math.max(0, Math.min(puntos.length - 1, actual + (e.key === 'ArrowRight' ? 1 : -1)));
+      enTeclado();
+    });
+  }
+
+  /** Tooltip por marca: con el mouse y con el teclado (Tab). */
+  function conTooltip(hit: Element, marca: Element | null, contenido: () => [string, string, string]) {
+    const activar = (x: number, y: number) => {
+      marca?.classList.add('activa');
+      const [v, e, c] = contenido();
+      mostrarTip(x, y, v, e, c);
+    };
+    const desactivar = () => { marca?.classList.remove('activa'); ocultarTip(); };
+    hit.addEventListener('pointermove', (e) => activar((e as PointerEvent).clientX, (e as PointerEvent).clientY));
+    hit.addEventListener('pointerleave', desactivar);
+    hit.addEventListener('focus', () => {
+      const r = hit.getBoundingClientRect();
+      activar(r.left + r.width / 2, r.top);
+    });
+    hit.addEventListener('blur', desactivar);
+  }
+
+  // Redibuja los gráficos al cambiar el ancho de la ventana
+  let redibujo: ReturnType<typeof setTimeout> | undefined;
+  new ResizeObserver(() => {
+    clearTimeout(redibujo);
+    redibujo = setTimeout(() => ultimo && pintar(ultimo), 150);
+  }).observe($('contenido'));
+
+  // ------------------------------------------------------------------ inicio
+  function iniciarPanel() {
+    mostrarPanel(true);
+    irA(location.hash.slice(1) || 'kpi');
+    const [d, h] = rangoPreset('mes');
+    $<HTMLInputElement>('desde').value = d;
+    $<HTMLInputElement>('hasta').value = h;
+    marcarPreset('mes');
+    cargarImportaciones();
+    cargarResumen();
+  }
+
+  if (clave) iniciarPanel();
+  setInterval(() => clave && cargarImportaciones(), 60_000);
+</script>

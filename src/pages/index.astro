@@ -1,0 +1,498 @@
+---
+import Base from '../layouts/Base.astro';
+import Cara from '../components/Cara.astro';
+---
+<Base titulo="Encuesta de satisfacción">
+  <header class="cabecera">
+    <h1>¿Cómo fue su experiencia con nuestro servicio?</h1>
+  </header>
+
+  <main>
+    <!-- 1. Ingreso del número de OT -->
+    <section id="paso-ot" class="tarjeta">
+      <h2>Ingrese el número de su orden de trabajo</h2>
+      <form id="form-ot" autocomplete="off">
+        <input
+          id="input-ot"
+          name="ot"
+          maxlength="15"
+          placeholder="8200000000"
+          inputmode="numeric"
+          spellcheck="false"
+          required
+        />
+        <button class="btn" type="submit" id="btn-buscar">Continuar</button>
+      </form>
+      <p id="error-ot" class="error" role="alert"></p>
+    </section>
+
+    <!-- 2. Datos de la OT + caras -->
+    <section id="paso-voto" class="tarjeta oculto">
+      <article class="ficha" aria-label="Datos de su orden de trabajo">
+        <header class="ficha-cabecera">
+          <div class="ficha-ot">
+            <span class="etq">Orden de trabajo</span>
+            <b id="d-ot"></b>
+          </div>
+          <div class="ficha-servicio" id="d-servicio-caja">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.1-.6-.6-2.1z" /></svg>
+            <div>
+              <span class="etq">Servicio realizado</span>
+              <b id="d-servicio"></b>
+            </div>
+          </div>
+        </header>
+        <dl class="ficha-datos">
+          <div class="dato-cliente"><dt>Cliente</dt><dd id="d-cliente"></dd></div>
+          <div><dt>Placa</dt><dd><span id="d-placa" class="placa"></span></dd></div>
+          <div><dt>Vehículo</dt><dd id="d-vehiculo"></dd></div>
+        </dl>
+      </article>
+
+      <p class="progreso">Pregunta 1 de 2</p>
+      <h2>¿Cuál es su satisfacción con el servicio?</h2>
+      <div class="caras">
+        <button class="cara" data-nivel="1" style="color: var(--rojo)">
+          <Cara nivel={1} /><span>Insatisfecho</span>
+        </button>
+        <button class="cara" data-nivel="2" style="color: var(--ambar)">
+          <Cara nivel={2} /><span>Neutral</span>
+        </button>
+        <button class="cara" data-nivel="3" style="color: var(--verde)">
+          <Cara nivel={3} /><span>Satisfecho</span>
+        </button>
+      </div>
+      <button class="btn btn-secundario" id="btn-cancelar" type="button">Cancelar</button>
+    </section>
+
+    <!-- 3. Recomendación 0-10 -->
+    <section id="paso-recomendacion" class="tarjeta oculto">
+      <p class="progreso">Pregunta 2 de 2</p>
+      <h2>¿Qué tan probable es que nos recomiende a un familiar o amigo?</h2>
+      <div class="escala">
+        {Array.from({ length: 11 }, (_, i) => (
+          <button class="punto" data-valor={i} data-grupo={i <= 6 ? 'd' : i <= 8 ? 'p' : 'r'}>{i}</button>
+        ))}
+      </div>
+      <div class="escala-leyenda"><span>Nada probable</span><span>Muy probable</span></div>
+      <p id="error-voto" class="error" role="alert"></p>
+      <button class="btn btn-secundario atras" data-volver="paso-voto" type="button">Atrás</button>
+    </section>
+
+    <!-- 4. Comentario opcional: solo cuando la calificación es baja -->
+    <section id="paso-comentario" class="tarjeta oculto">
+      <p class="progreso">Opcional</p>
+      <h2>Lamentamos que su experiencia no haya sido la mejor. ¿Qué podríamos mejorar?</h2>
+      <textarea
+        id="input-comentario"
+        maxlength="500"
+        rows="4"
+        placeholder="Escriba aquí su comentario (opcional)"
+      ></textarea>
+      <p class="contador"><span id="contador-comentario">0</span> / 500</p>
+      <p id="error-comentario" class="error" role="alert"></p>
+      <div class="acciones">
+        <button class="btn btn-secundario" id="btn-omitir" type="button">Omitir</button>
+        <button class="btn" id="btn-enviar-comentario" type="button">Enviar comentario</button>
+      </div>
+    </section>
+
+    <section id="paso-mensaje" class="tarjeta oculto">
+      <div id="m-icono" class="icono-mensaje"></div>
+      <h2 id="m-titulo"></h2>
+      <p id="m-texto"></p>
+      <button class="btn" id="btn-inicio" type="button">Volver al inicio</button>
+    </section>
+  </main>
+</Base>
+
+<style>
+  .cabecera {
+    background: var(--cabecera);
+    color: #fff;
+    padding: 28px 24px;
+    text-align: center;
+  }
+  .cabecera h1 { margin: 0; font-size: clamp(1.4rem, 3.5vw, 2.2rem); }
+
+  main {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 32px 16px;
+  }
+  .tarjeta {
+    background: var(--tarjeta);
+    border-radius: var(--radio);
+    box-shadow: 0 6px 24px rgba(15, 42, 74, 0.08);
+    padding: 40px 32px;
+    text-align: center;
+  }
+  h2 { margin: 0 0 28px; font-size: clamp(1.2rem, 3vw, 1.7rem); }
+
+  #form-ot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+  }
+  #input-ot {
+    width: min(100%, 560px);
+    font-size: clamp(1.8rem, 6vw, 3.2rem);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    text-transform: uppercase;
+    padding: 16px;
+    border: 3px solid var(--borde);
+    border-radius: 16px;
+    outline: none;
+  }
+  #input-ot:focus { border-color: var(--azul-claro); }
+
+  /* Ficha de la OT */
+  .ficha {
+    text-align: left;
+    border: 1px solid var(--borde);
+    border-radius: 18px;
+    overflow: hidden;
+    margin: 0 0 32px;
+  }
+  .ficha-cabecera {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 12px 24px;
+    background: var(--fondo);
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--borde);
+  }
+  .ficha .etq {
+    display: block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--texto-suave);
+  }
+  .ficha-ot b {
+    font-size: clamp(1.3rem, 2.6vw, 1.7rem);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.03em;
+  }
+  .ficha-servicio {
+    flex: 1 1 260px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #fff;
+    border: 1px solid var(--borde);
+    border-radius: 12px;
+    padding: 10px 14px;
+  }
+  .ficha-servicio svg {
+    width: 26px; height: 26px; flex: none;
+    fill: none; stroke: var(--azul-claro); stroke-width: 2; stroke-linejoin: round;
+  }
+  .ficha-servicio b { font-size: clamp(1rem, 2.2vw, 1.25rem); line-height: 1.25; color: var(--azul); }
+  .ficha-datos {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1.4fr;
+    gap: 16px 24px;
+    margin: 0;
+    padding: 18px 22px 20px;
+  }
+  .ficha-datos dt {
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--texto-suave);
+  }
+  .ficha-datos dd { margin: 6px 0 0; font-size: clamp(1.05rem, 2.2vw, 1.3rem); font-weight: 600; overflow-wrap: anywhere; }
+  .placa {
+    display: inline-block;
+    padding: 2px 12px;
+    border: 2px solid var(--texto);
+    border-radius: 8px;
+    background: #fff;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .caras {
+    display: flex;
+    justify-content: center;
+    gap: clamp(12px, 4vw, 48px);
+    margin-bottom: 32px;
+  }
+  .cara {
+    background: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 20px;
+    transition: transform 0.15s;
+  }
+  .cara:active { transform: scale(0.92); }
+  .cara:disabled { opacity: 0.4; }
+  .cara :global(svg) { width: clamp(90px, 20vw, 170px); height: auto; }
+  .cara span { color: var(--texto); font-size: clamp(1rem, 2.5vw, 1.35rem); font-weight: 600; }
+
+  .progreso {
+    margin: 0 0 8px;
+    color: var(--texto-suave);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 0.9rem;
+  }
+
+  .escala {
+    display: grid;
+    grid-template-columns: repeat(11, 1fr);
+    gap: clamp(4px, 1vw, 10px);
+    margin-bottom: 12px;
+  }
+  .punto {
+    aspect-ratio: 1;
+    min-height: 48px;
+    border-radius: 14px;
+    font-size: clamp(1.1rem, 3vw, 1.8rem);
+    font-weight: 700;
+    color: #fff;
+    transition: transform 0.15s;
+  }
+  .punto[data-grupo='d'] { background: var(--rojo); }
+  .punto[data-grupo='p'] { background: var(--ambar); }
+  .punto[data-grupo='r'] { background: var(--verde); }
+  .punto:active { transform: scale(0.9); }
+  .punto:disabled { opacity: 0.4; }
+  .escala-leyenda {
+    display: flex;
+    justify-content: space-between;
+    color: var(--texto-suave);
+    font-weight: 600;
+    margin-bottom: 32px;
+  }
+  /* Tablet vertical (y pantallas medianas): cliente a todo el ancho, placa y vehículo abajo */
+  @media (max-width: 900px) {
+    .ficha-datos { grid-template-columns: 1fr 1fr; }
+    .dato-cliente { grid-column: 1 / -1; }
+  }
+  /* Tablet horizontal de poca altura: todo entra sin desplazarse */
+  @media (orientation: landscape) and (max-height: 860px) and (min-width: 900px) {
+    .cabecera { padding: 16px 24px; }
+    main { padding: 18px 16px; }
+    .tarjeta { padding: 24px 28px; }
+    h2 { margin-bottom: 18px; }
+    .ficha { margin-bottom: 18px; }
+    .ficha-cabecera { padding: 12px 18px; }
+    .ficha-datos { padding: 12px 18px 14px; }
+    .caras { margin-bottom: 18px; }
+    .cara :global(svg) { width: clamp(80px, 14vh, 140px); }
+  }
+
+  @media (max-width: 560px) {
+    .ficha-datos { grid-template-columns: 1fr; }
+    .ficha-cabecera, .ficha-datos { padding-left: 16px; padding-right: 16px; }
+    .escala { grid-template-columns: repeat(6, 1fr); }
+  }
+
+  #input-comentario {
+    width: 100%;
+    font: inherit;
+    font-size: 1.15rem;
+    padding: 14px 16px;
+    border: 3px solid var(--borde);
+    border-radius: 16px;
+    resize: none;
+    outline: none;
+  }
+  #input-comentario:focus { border-color: var(--azul-claro); }
+  .contador { margin: 6px 0 0; text-align: right; color: var(--texto-suave); font-size: 0.9rem; }
+  .acciones { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; margin-top: 20px; }
+
+  .icono-mensaje { font-size: 5rem; line-height: 1; margin-bottom: 16px; }
+  #m-texto { font-size: 1.25rem; color: var(--texto-suave); margin: 0 0 32px; }
+  .error { color: var(--rojo); font-weight: 600; min-height: 1.5em; margin: 20px 0 0; }
+</style>
+
+<script>
+  const API = import.meta.env.PUBLIC_API_URL ?? 'http://localhost:3000';
+  const REINICIO_GRACIAS_MS = 6000;   // tras votar vuelve solo al inicio
+  const REINICIO_INACTIVO_MS = 120_000; // 2 min sin tocar una respuesta: vuelve al inicio
+
+  const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+  const pasos = ['paso-ot', 'paso-voto', 'paso-recomendacion', 'paso-comentario', 'paso-mensaje'].map((id) => $(id));
+  const inputOt = $<HTMLInputElement>('input-ot');
+  const btnBuscar = $<HTMLButtonElement>('btn-buscar');
+  const botonesCara = [...document.querySelectorAll<HTMLButtonElement>('.cara')];
+  const botonesPunto = [...document.querySelectorAll<HTMLButtonElement>('.punto')];
+
+  let ordenId: number | null = null;
+  let satisfaccion: number | null = null;
+  let recomendacion: number | null = null;
+  const inputComentario = $<HTMLTextAreaElement>('input-comentario');
+  const botonesComentario = [$<HTMLButtonElement>('btn-omitir'), $<HTMLButtonElement>('btn-enviar-comentario')];
+  let temporizador: ReturnType<typeof setTimeout> | undefined;
+
+  function mostrar(id: string) {
+    pasos.forEach((p) => p.classList.toggle('oculto', p.id !== id));
+  }
+
+  function reiniciarEn(ms: number) {
+    clearTimeout(temporizador);
+    temporizador = setTimeout(inicio, ms);
+  }
+
+  function inicio() {
+    clearTimeout(temporizador);
+    ordenId = null;
+    satisfaccion = null;
+    recomendacion = null;
+    inputOt.value = '';
+    inputComentario.value = '';
+    $('contador-comentario').textContent = '0';
+    $('error-comentario').textContent = '';
+    botonesComentario.forEach((b) => (b.disabled = false));
+    $('error-ot').textContent = '';
+    $('error-voto').textContent = '';
+    botonesPunto.forEach((b) => (b.disabled = false));
+    mostrar('paso-ot');
+    inputOt.focus();
+  }
+
+  function mensaje(icono: string, titulo: string, texto: string, reinicioMs: number) {
+    $('m-icono').textContent = icono;
+    $('m-titulo').textContent = titulo;
+    $('m-texto').textContent = texto;
+    mostrar('paso-mensaje');
+    reiniciarEn(reinicioMs);
+  }
+
+  async function api(ruta: string, opciones?: RequestInit) {
+    const r = await fetch(`${API}${ruta}`, opciones);
+    const datos = await r.json().catch(() => ({}));
+    return { ok: r.ok, status: r.status, datos };
+  }
+
+  $('form-ot').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const numero = inputOt.value.replace(/\s+/g, '');
+    if (!numero) return;
+
+    btnBuscar.disabled = true;
+    $('error-ot').textContent = '';
+    try {
+      const { ok, datos } = await api(`/api/ordenes/${encodeURIComponent(numero)}`);
+      if (!ok) {
+        $('error-ot').textContent = datos.mensaje ?? 'No se pudo consultar la orden de trabajo.';
+        return;
+      }
+      if (!datos.puedeVotar) {
+        mensaje('ℹ️', 'Aviso', datos.mensaje, 8000);
+        return;
+      }
+      const o = datos.orden;
+      ordenId = o.id;
+      $('d-cliente').textContent = o.cliente ?? '—';
+      $('d-placa').textContent = o.placa;
+      $('d-vehiculo').textContent = [o.marca, o.modelo].filter(Boolean).join(' ') || '—';
+      $('d-ot').textContent = o.numero_ot;
+      $('d-servicio').textContent = o.servicio ?? '';
+      $('d-servicio-caja').classList.toggle('oculto', !o.servicio);
+      mostrar('paso-voto');
+      reiniciarEn(REINICIO_INACTIVO_MS);
+    } catch {
+      $('error-ot').textContent = 'Sin conexión con el servidor. Intente nuevamente.';
+    } finally {
+      btnBuscar.disabled = false;
+    }
+  });
+
+  // Pregunta 1: satisfacción -> pasa a la pregunta 2 (todavía no se guarda nada)
+  botonesCara.forEach((boton) =>
+    boton.addEventListener('click', () => {
+      if (ordenId === null) return;
+      satisfaccion = Number(boton.dataset.nivel);
+      mostrar('paso-recomendacion');
+      reiniciarEn(REINICIO_INACTIVO_MS);
+    }),
+  );
+
+  // Calificación baja: insatisfecho o detractor (recomendación 0-6)
+  const esCalificacionBaja = () =>
+    satisfaccion === 1 || (recomendacion !== null && recomendacion <= 6);
+
+  // Guarda las respuestas juntas (con o sin comentario)
+  async function enviar(comentario: string, errorId: string, botones: HTMLButtonElement[]) {
+    if (ordenId === null || satisfaccion === null || recomendacion === null) return;
+    clearTimeout(temporizador);
+    botones.forEach((b) => (b.disabled = true));
+    $(errorId).textContent = '';
+    try {
+      const { ok, status, datos } = await api('/api/encuestas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orden_id: ordenId, satisfaccion, recomendacion, comentario }),
+      });
+      if (ok) {
+        mensaje('🙌', '¡Gracias por su calificación!', 'Su opinión nos ayuda a mejorar.', REINICIO_GRACIAS_MS);
+      } else if (status === 409) {
+        mensaje('ℹ️', 'Aviso', datos.mensaje, 8000);
+      } else {
+        $(errorId).textContent = datos.mensaje ?? 'No se pudo registrar su voto.';
+        reiniciarEn(REINICIO_INACTIVO_MS);
+      }
+    } catch {
+      $(errorId).textContent = 'Sin conexión con el servidor. Intente nuevamente.';
+      reiniciarEn(REINICIO_INACTIVO_MS);
+    } finally {
+      botones.forEach((b) => (b.disabled = false));
+    }
+  }
+
+  // Pregunta 2: recomendación 0-10 -> comentario opcional si la calificación es baja; si no, se guarda
+  botonesPunto.forEach((boton) =>
+    boton.addEventListener('click', () => {
+      if (ordenId === null || satisfaccion === null) return;
+      recomendacion = Number(boton.dataset.valor);
+      $('error-voto').textContent = '';
+      if (esCalificacionBaja()) {
+        mostrar('paso-comentario');
+        esperarComentario();
+        inputComentario.focus();
+      } else {
+        enviar('', 'error-voto', botonesPunto);
+      }
+    }),
+  );
+
+  // Si el cliente deja la pantalla del comentario sin tocar, se guardan igual sus 3 respuestas
+  const esperarComentario = () => {
+    clearTimeout(temporizador);
+    temporizador = setTimeout(() => enviar(inputComentario.value.trim(), 'error-comentario', botonesComentario), REINICIO_INACTIVO_MS);
+  };
+  inputComentario.addEventListener('input', () => {
+    $('contador-comentario').textContent = String(inputComentario.value.length);
+    esperarComentario();
+  });
+  $('btn-enviar-comentario').addEventListener('click', () =>
+    enviar(inputComentario.value.trim(), 'error-comentario', botonesComentario));
+  $('btn-omitir').addEventListener('click', () => enviar('', 'error-comentario', botonesComentario));
+
+  document.querySelectorAll<HTMLButtonElement>('.atras').forEach((boton) =>
+    boton.addEventListener('click', () => {
+      $('error-voto').textContent = '';
+      mostrar(boton.dataset.volver!);
+      reiniciarEn(REINICIO_INACTIVO_MS);
+    }),
+  );
+  $('btn-cancelar').addEventListener('click', inicio);
+  $('btn-inicio').addEventListener('click', inicio);
+  inicio();
+</script>
