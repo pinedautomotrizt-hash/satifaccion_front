@@ -16,10 +16,10 @@ import Cara from '../components/Cara.astro';
           id="input-ot"
           name="ot"
           maxlength="15"
-          placeholder="8200000000"
           inputmode="numeric"
           spellcheck="false"
           required
+          value="820000"
         />
         <button class="btn" type="submit" id="btn-buscar">Continuar</button>
       </form>
@@ -329,6 +329,8 @@ import Cara from '../components/Cara.astro';
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
   const pasos = ['paso-ot', 'paso-voto', 'paso-recomendacion', 'paso-comentario', 'paso-mensaje'].map((id) => $(id));
   const inputOt = $<HTMLInputElement>('input-ot');
+  // Inicio fijo de los números de OT: el cliente solo escribe los 4 últimos dígitos
+  const PREFIJO_OT = '820000';
   const btnBuscar = $<HTMLButtonElement>('btn-buscar');
   const botonesCara = [...document.querySelectorAll<HTMLButtonElement>('.cara')];
   const botonesPunto = [...document.querySelectorAll<HTMLButtonElement>('.punto')];
@@ -354,7 +356,7 @@ import Cara from '../components/Cara.astro';
     ordenId = null;
     satisfaccion = null;
     recomendacion = null;
-    inputOt.value = '';
+    inputOt.value = PREFIJO_OT;
     inputComentario.value = '';
     $('contador-comentario').textContent = '0';
     $('error-comentario').textContent = '';
@@ -364,6 +366,7 @@ import Cara from '../components/Cara.astro';
     botonesPunto.forEach((b) => (b.disabled = false));
     mostrar('paso-ot');
     inputOt.focus();
+    inputOt.setSelectionRange(PREFIJO_OT.length, PREFIJO_OT.length); // cursor al final
   }
 
   function mensaje(icono: string, titulo: string, texto: string, reinicioMs: number) {

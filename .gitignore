@@ -1,4 +1,12 @@
-node_modules
-dist
-.astro
+node_modules/
+dist/
+.astro/
+
+# Claves: nunca subir (sí se sube .env.example)
 .env
+.env.*
+!.env.example
+
+*.log
+.DS_Store
+Thumbs.db
