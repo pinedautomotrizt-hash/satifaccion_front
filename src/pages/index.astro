@@ -79,21 +79,38 @@ import Cara from '../components/Cara.astro';
       <button class="btn btn-secundario atras" data-volver="paso-voto" type="button">Atrás</button>
     </section>
 
-    <!-- 4. Comentario opcional: solo cuando la calificación es baja -->
+    <!-- 4. Comentario opcional (para todos) con respuestas rápidas según la calificación -->
     <section id="paso-comentario" class="tarjeta oculto">
       <p class="progreso">Opcional</p>
-      <h2>Lamentamos que su experiencia no haya sido la mejor. ¿Qué podríamos mejorar?</h2>
+      <h2 id="titulo-comentario"></h2>
+      <p class="ayuda-rapidas">Toque una o varias opciones, o escriba su comentario.</p>
+      <div class="rapidas" id="rapidas-positivas" role="group" aria-label="Lo que más le gustó">
+          <button class="chip-rapida" type="button" aria-pressed="false">Buena atención</button>
+          <button class="chip-rapida" type="button" aria-pressed="false">Rapidez en la entrega</button>
+          <button class="chip-rapida" type="button" aria-pressed="false">Trabajo bien hecho</button>
+          <button class="chip-rapida" type="button" aria-pressed="false">Buena comunicación</button>
+          <button class="chip-rapida" type="button" aria-pressed="false">Buen precio</button>
+          <button class="chip-rapida" type="button" aria-pressed="false">Vehículo limpio</button>
+      </div>
+      <div class="rapidas" id="rapidas-mejoras" role="group" aria-label="Qué podríamos mejorar">
+          <button class="chip-rapida" type="button" aria-pressed="false">Tiempo en la entrega</button>
+          <button class="chip-rapida" type="button" aria-pressed="false">Falta de comunicación</button>
+          <button class="chip-rapida" type="button" aria-pressed="false">Atención del asesor</button>
+          <button class="chip-rapida" type="button" aria-pressed="false">Calidad del trabajo</button>
+          <button class="chip-rapida" type="button" aria-pressed="false">Precio</button>
+          <button class="chip-rapida" type="button" aria-pressed="false">Limpieza del vehículo</button>
+      </div>
       <textarea
         id="input-comentario"
-        maxlength="500"
-        rows="4"
+        maxlength="350"
+        rows="3"
         placeholder="Escriba aquí su comentario (opcional)"
       ></textarea>
-      <p class="contador"><span id="contador-comentario">0</span> / 500</p>
+      <p class="contador"><span id="contador-comentario">0</span> / 350</p>
       <p id="error-comentario" class="error" role="alert"></p>
       <div class="acciones">
         <button class="btn btn-secundario" id="btn-omitir" type="button">Omitir</button>
-        <button class="btn" id="btn-enviar-comentario" type="button">Enviar comentario</button>
+        <button class="btn" id="btn-enviar-comentario" type="button">Enviar</button>
       </div>
     </section>
 
@@ -313,6 +330,21 @@ import Cara from '../components/Cara.astro';
     outline: none;
   }
   #input-comentario:focus { border-color: var(--azul-claro); }
+  .ayuda-rapidas { margin: -14px 0 16px; color: var(--texto-suave); }
+  .rapidas { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-bottom: 18px; }
+  .chip-rapida {
+    background: #fff;
+    color: var(--texto);
+    border: 2px solid var(--borde);
+    border-radius: 999px;
+    padding: 12px 20px;
+    font-size: clamp(1rem, 2.2vw, 1.15rem);
+    font-weight: 600;
+    transition: transform 0.1s;
+  }
+  .chip-rapida:active { transform: scale(0.96); }
+  .chip-rapida[aria-pressed='true'] { background: var(--azul-claro); border-color: var(--azul-claro); color: #fff; }
+  .chip-rapida[aria-pressed='true']::before { content: '✓ '; }
   .contador { margin: 6px 0 0; text-align: right; color: var(--texto-suave); font-size: 0.9rem; }
   .acciones { display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; margin-top: 20px; }
 
@@ -339,6 +371,7 @@ import Cara from '../components/Cara.astro';
   let satisfaccion: number | null = null;
   let recomendacion: number | null = null;
   const inputComentario = $<HTMLTextAreaElement>('input-comentario');
+  const chipsRapidas = [...document.querySelectorAll<HTMLButtonElement>('.chip-rapida')];
   const botonesComentario = [$<HTMLButtonElement>('btn-omitir'), $<HTMLButtonElement>('btn-enviar-comentario')];
   let temporizador: ReturnType<typeof setTimeout> | undefined;
 
@@ -358,6 +391,7 @@ import Cara from '../components/Cara.astro';
     recomendacion = null;
     inputOt.value = PREFIJO_OT;
     inputComentario.value = '';
+    chipsRapidas.forEach((c) => c.setAttribute('aria-pressed', 'false'));
     $('contador-comentario').textContent = '0';
     $('error-comentario').textContent = '';
     botonesComentario.forEach((b) => (b.disabled = false));
@@ -427,9 +461,32 @@ import Cara from '../components/Cara.astro';
     }),
   );
 
-  // Calificación baja: insatisfecho o detractor (recomendación 0-6)
-  const esCalificacionBaja = () =>
-    satisfaccion === 1 || (recomendacion !== null && recomendacion <= 6);
+  // Experiencia muy buena: satisfecho y promotor (9-10). Define qué respuestas rápidas se ofrecen.
+  const esMuyBuena = () => satisfaccion === 3 && recomendacion !== null && recomendacion >= 9;
+
+  function abrirComentario() {
+    const buena = esMuyBuena();
+    const mala = satisfaccion === 1 || (recomendacion !== null && recomendacion <= 6);
+    $('titulo-comentario').textContent = buena
+      ? '¡Gracias! ¿Qué fue lo que más le gustó?'
+      : mala
+        ? 'Lamentamos que su experiencia no haya sido la mejor. ¿Qué podríamos mejorar?'
+        : '¿Qué podríamos mejorar para que su próxima visita sea excelente?';
+    $('rapidas-positivas').classList.toggle('oculto', !buena);
+    $('rapidas-mejoras').classList.toggle('oculto', buena);
+    chipsRapidas.forEach((c) => c.setAttribute('aria-pressed', 'false'));
+    mostrar('paso-comentario');
+    esperarComentario();
+  }
+
+  // "Rapidez en la entrega · Buena atención — texto escrito"
+  function componerComentario() {
+    const elegidas = chipsRapidas
+      .filter((c) => c.getAttribute('aria-pressed') === 'true' && !c.parentElement!.classList.contains('oculto'))
+      .map((c) => c.textContent!.trim());
+    const texto = inputComentario.value.trim();
+    return [elegidas.join(' · '), texto].filter(Boolean).join(' — ').slice(0, 500);
+  }
 
   // Guarda las respuestas juntas (con o sin comentario)
   async function enviar(comentario: string, errorId: string, botones: HTMLButtonElement[]) {
@@ -459,33 +516,34 @@ import Cara from '../components/Cara.astro';
     }
   }
 
-  // Pregunta 2: recomendación 0-10 -> comentario opcional si la calificación es baja; si no, se guarda
+  // Pregunta 2: recomendación 0-10 -> comentario opcional (para todos)
   botonesPunto.forEach((boton) =>
     boton.addEventListener('click', () => {
       if (ordenId === null || satisfaccion === null) return;
       recomendacion = Number(boton.dataset.valor);
       $('error-voto').textContent = '';
-      if (esCalificacionBaja()) {
-        mostrar('paso-comentario');
-        esperarComentario();
-        inputComentario.focus();
-      } else {
-        enviar('', 'error-voto', botonesPunto);
-      }
+      abrirComentario();
     }),
   );
 
-  // Si el cliente deja la pantalla del comentario sin tocar, se guardan igual sus 3 respuestas
-  const esperarComentario = () => {
+  chipsRapidas.forEach((chip) =>
+    chip.addEventListener('click', () => {
+      chip.setAttribute('aria-pressed', String(chip.getAttribute('aria-pressed') !== 'true'));
+      esperarComentario();
+    }),
+  );
+
+  // Si el cliente deja la pantalla del comentario sin tocar, se guardan igual sus respuestas
+  function esperarComentario() {
     clearTimeout(temporizador);
-    temporizador = setTimeout(() => enviar(inputComentario.value.trim(), 'error-comentario', botonesComentario), REINICIO_INACTIVO_MS);
-  };
+    temporizador = setTimeout(() => enviar(componerComentario(), 'error-comentario', botonesComentario), REINICIO_INACTIVO_MS);
+  }
   inputComentario.addEventListener('input', () => {
     $('contador-comentario').textContent = String(inputComentario.value.length);
     esperarComentario();
   });
   $('btn-enviar-comentario').addEventListener('click', () =>
-    enviar(inputComentario.value.trim(), 'error-comentario', botonesComentario));
+    enviar(componerComentario(), 'error-comentario', botonesComentario));
   $('btn-omitir').addEventListener('click', () => enviar('', 'error-comentario', botonesComentario));
 
   document.querySelectorAll<HTMLButtonElement>('.atras').forEach((boton) =>

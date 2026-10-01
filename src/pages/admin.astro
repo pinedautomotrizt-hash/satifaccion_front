@@ -162,7 +162,7 @@ import Base from '../layouts/Base.astro';
       <!-- Comentarios (solo se piden cuando la calificación es baja) -->
       <section class="tarjeta">
         <h3>Comentarios de clientes <span class="sub" id="c-total"></span></h3>
-        <p class="sub">Se piden solo cuando la calificación es baja: insatisfecho o recomendación de 0 a 6.</p>
+        <p class="sub">Comentario opcional al final de la encuesta (incluye las respuestas rápidas). El color indica la satisfacción del cliente.</p>
         <ul id="lista-comentarios" class="comentarios"></ul>
       </section>
 
@@ -334,7 +334,7 @@ import Base from '../layouts/Base.astro';
   th { color: var(--tinta-2); font-weight: 600; font-size: 0.82rem; }
   #btn-mas { margin-top: 12px; }
   .comentarios { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 10px; }
-  .comentarios li { border: 1px solid var(--g-grilla); border-left: 4px solid var(--g-neg); border-radius: 10px; padding: 12px 14px; }
+  .comentarios li { border: 1px solid var(--g-grilla); border-left: 4px solid var(--borde-c, var(--g-neu)); border-radius: 10px; padding: 12px 14px; }
   .comentarios .c-texto { margin: 0 0 8px; font-size: 1rem; color: var(--tinta-1); white-space: pre-wrap; overflow-wrap: anywhere; }
   .comentarios .c-meta { margin: 0; font-size: 0.82rem; color: var(--tinta-2); display: flex; flex-wrap: wrap; gap: 4px 12px; }
   .comentarios .vacio { border: 0; padding: 12px 0; text-align: left; }
@@ -612,6 +612,7 @@ import Base from '../layouts/Base.astro';
     }
     for (const e of lista.slice(0, 30)) {
       const li = document.createElement('li');
+      li.style.setProperty('--borde-c', colorSat(e.satisfaccion));
       const texto = document.createElement('p');
       texto.className = 'c-texto';
       texto.textContent = e.comentario;
