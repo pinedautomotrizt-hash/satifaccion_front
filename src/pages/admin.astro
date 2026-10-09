@@ -91,6 +91,9 @@ import Base from '../layouts/Base.astro';
         <button type="button" data-preset="mes">Este mes</button>
         <button type="button" data-preset="mes-anterior">Mes anterior</button>
       </div>
+      <label class="sede-filtro">Sede
+        <select id="sede"><option value="">Todas</option></select>
+      </label>
       <form id="form-rango" class="rango">
         <label>Desde <input id="desde" type="date" required /></label>
         <label>Hasta <input id="hasta" type="date" required /></label>
@@ -148,6 +151,17 @@ import Base from '../layouts/Base.astro';
         <details><summary>Ver datos</summary><div id="t-tendencia-nps"></div></details>
       </article>
 
+      <!-- Por sede (solo con "Todas") -->
+      <section class="tarjeta" id="seccion-sede">
+        <h3>Por sede</h3>
+        <div class="tabla-contenedor">
+          <table>
+            <thead><tr><th>Sede</th><th class="num">Encuestas</th><th class="num">NPS</th><th class="num">CSI</th></tr></thead>
+            <tbody id="tabla-sede"></tbody>
+          </table>
+        </div>
+      </section>
+
       <!-- Por asesor -->
       <section class="tarjeta">
         <h3>Por asesor</h3>
@@ -172,7 +186,7 @@ import Base from '../layouts/Base.astro';
         <div class="tabla-contenedor">
           <table>
             <thead>
-              <tr><th>Fecha</th><th>OT</th><th>Placa</th><th>Cliente</th><th>Vehículo</th><th>Servicio</th><th>Asesor</th><th>Satisfacción</th><th class="num">Recomendación</th><th>Comentario</th></tr>
+              <tr><th>Fecha</th><th>Sede</th><th>OT</th><th>Placa</th><th>Cliente</th><th>Vehículo</th><th>Servicio</th><th>Asesor</th><th>Satisfacción</th><th class="num">Recomendación</th><th>Comentario</th></tr>
             </thead>
             <tbody id="tabla-detalle"></tbody>
           </table>
@@ -273,6 +287,7 @@ import Base from '../layouts/Base.astro';
   .presets button:hover { background: #eef2f8; }
   .presets button[aria-pressed='true'] { background: var(--azul); border-color: var(--azul); color: #fff; font-weight: 600; }
   .rango { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .sede-filtro select { font: inherit; padding: 8px 12px; border: 1px solid var(--borde); border-radius: 10px; background: #fff; }
 
   .contenido { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; transition: opacity 0.15s; }
   .contenido.cargando { opacity: 0.5; }
@@ -470,6 +485,7 @@ import Base from '../layouts/Base.astro';
       ok.textContent = `✔ ${r.procesadas} órdenes cargadas/actualizadas · ` +
         Object.entries(r.porEstado).map(([e, n]) => `${e}: ${n}`).join(' · ');
       salida.append(ok);
+      cargarSedes();
       if (r.errores.length) {
         const p = document.createElement('p');
         p.className = 'error';
@@ -533,7 +549,8 @@ import Base from '../layouts/Base.astro';
     try {
       const desde = $<HTMLInputElement>('desde').value;
       const hasta = $<HTMLInputElement>('hasta').value;
-      ultimo = await api(`/api/admin/resumen?desde=${desde}&hasta=${hasta}`);
+      const sede = $<HTMLSelectElement>('sede').value;
+      ultimo = await api(`/api/admin/resumen?desde=${desde}&hasta=${hasta}&sede=${encodeURIComponent(sede)}`);
       visibles = POR_PAGINA;
       pintar(ultimo);
     } catch (err) {
@@ -590,6 +607,12 @@ import Base from '../layouts/Base.astro';
       puntos.map((p) => [fechaCorta(p.periodo), fmt(p.total), p.nps === null ? '—' : fmt(p.nps)]));
 
     // Tablas
+    $('seccion-sede').classList.toggle('oculto', Boolean(r.sede));
+    filas($<HTMLTableSectionElement>('tabla-sede'), r.porSede.map((a: any) => [
+      a.sede, { t: fmt(a.total), num: true },
+      { t: a.nps === null ? '—' : (a.nps > 0 ? '+' : '') + fmt(a.nps), num: true },
+      { t: a.pctSatisfechos === null ? '—' : `${fmt(a.pctSatisfechos)}%`, num: true },
+    ]), 4);
     filas($<HTMLTableSectionElement>('tabla-asesor'), r.porAsesor.map((a: any) => [
       a.asesor, { t: fmt(a.total), num: true },
       { t: a.nps === null ? '—' : (a.nps > 0 ? '+' : '') + fmt(a.nps), num: true },
@@ -639,12 +662,12 @@ import Base from '../layouts/Base.astro';
     boton.classList.toggle('oculto', detalle.length <= cantidad);
     boton.textContent = `Mostrar más (${fmt(Math.min(detalle.length, cantidad))} de ${fmt(detalle.length)})`;
     filas($<HTMLTableSectionElement>('tabla-detalle'), detalle.slice(0, cantidad).map((e: any) => [
-      e.created_at.slice(0, 16), e.numero_ot, e.placa, e.cliente ?? '—',
+      e.created_at.slice(0, 16), e.sede ?? '—', e.numero_ot, e.placa, e.cliente ?? '—',
       [e.marca, e.modelo].filter(Boolean).join(' ') || '—', e.servicio ?? '—', e.asesor ?? '—',
       { t: SATISFACCION[e.satisfaccion - 1], color: colorSat(e.satisfaccion) },
       { t: String(e.recomendacion), color: colorNps(e.recomendacion), num: true },
       { t: e.comentario ?? '', clase: 'celda-comentario' },
-    ]), 10);
+    ]), 11);
   }
 
   $('btn-mas').addEventListener('click', () => ultimo && mostrarDetalle(ultimo.detalle, visibles + POR_PAGINA));
@@ -938,6 +961,19 @@ import Base from '../layouts/Base.astro';
     redibujo = setTimeout(() => ultimo && pintar(ultimo), 150);
   }).observe($('contenido'));
 
+  // ------------------------------------------------------------------ sedes
+  async function cargarSedes() {
+    try {
+      const r = await api('/api/admin/sedes');
+      const select = $<HTMLSelectElement>('sede');
+      const actual = select.value;
+      const todas = new Option('Todas', '');
+      select.replaceChildren(todas, ...r.sedes.map((x: any) => new Option(x.sede, x.sede)));
+      select.value = r.sedes.some((x: any) => x.sede === actual) ? actual : '';
+    } catch { /* el error se muestra en el resumen */ }
+  }
+  $('sede').addEventListener('change', () => cargarResumen());
+
   // ------------------------------------------------------------------ inicio
   function iniciarPanel() {
     mostrarPanel(true);
@@ -947,6 +983,7 @@ import Base from '../layouts/Base.astro';
     $<HTMLInputElement>('hasta').value = h;
     marcarPreset('mes');
     cargarImportaciones();
+    cargarSedes();
     cargarResumen();
   }
 

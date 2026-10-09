@@ -24,6 +24,7 @@ import Cara from '../components/Cara.astro';
         <button class="btn" type="submit" id="btn-buscar">Continuar</button>
       </form>
       <p id="error-ot" class="error" role="alert"></p>
+      <p class="sede-tablet" id="sede-tablet"></p>
     </section>
 
     <!-- 2. Datos de la OT + caras -->
@@ -166,6 +167,7 @@ import Cara from '../components/Cara.astro';
     outline: none;
   }
   #input-ot:focus { border-color: var(--azul-claro); }
+  .sede-tablet { margin: 18px 0 0; color: var(--texto-suave); font-size: 0.85rem; }
 
   /* Ficha de la OT */
   .ficha {
@@ -361,8 +363,26 @@ import Cara from '../components/Cara.astro';
   const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
   const pasos = ['paso-ot', 'paso-voto', 'paso-recomendacion', 'paso-comentario', 'paso-mensaje'].map((id) => $(id));
   const inputOt = $<HTMLInputElement>('input-ot');
-  // Inicio fijo de los números de OT: el cliente solo escribe los 4 últimos dígitos
-  const PREFIJO_OT = '820000';
+  // Sede de la tablet: se elige una vez abriendo la página con ?sede=trujillo o ?sede=callao
+  // y queda guardada en la tablet. Cada sede tiene su inicio fijo de OT (el cliente escribe los 4 últimos).
+  const SEDES: Record<string, { nombre: string; prefijo: string }> = {
+    trujillo: { nombre: 'Pineda Trujillo', prefijo: '820000' },
+    callao: { nombre: 'Pineda Callao', prefijo: '810002' }, // OT 8100020000-8100029999
+  };
+  function sedeDeLaTablet() {
+    const pedida = new URLSearchParams(location.search).get('sede')?.toLowerCase() ?? '';
+    try {
+      if (SEDES[pedida]) localStorage.setItem('sedeTablet', pedida);
+      const guardada = localStorage.getItem('sedeTablet') ?? '';
+      if (SEDES[guardada]) return guardada;
+    } catch {
+      if (SEDES[pedida]) return pedida;
+    }
+    return SEDES[pedida] ? pedida : 'trujillo';
+  }
+  const SEDE = SEDES[sedeDeLaTablet()];
+  const PREFIJO_OT = SEDE.prefijo;
+  $('sede-tablet').textContent = `Sede: ${SEDE.nombre}`;
   const btnBuscar = $<HTMLButtonElement>('btn-buscar');
   const botonesCara = [...document.querySelectorAll<HTMLButtonElement>('.cara')];
   const botonesPunto = [...document.querySelectorAll<HTMLButtonElement>('.punto')];
